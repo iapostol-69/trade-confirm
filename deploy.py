@@ -79,13 +79,18 @@ def main():
     if n == 0:
         print("ERROR: could not find 'version:' field in SKILL.md frontmatter.")
         sys.exit(1)
-    skill_path.write_text(updated, encoding='utf-8')
-    print(f"[1/5] Updated SKILL.md  version -> {version}")
+    changed = (text != updated)
+    if changed:
+        skill_path.write_text(updated, encoding='utf-8')
+        print(f"[1/5] Updated SKILL.md  version -> {version}")
 
-    # ── 2. Commit ──────────────────────────────────────────────────────────────
-    run(['git', 'add', 'SKILL.md'], cwd=ROOT)
-    run(['git', 'commit', '-m', f'Release {tag}'], cwd=ROOT)
-    print(f"[2/5] Committed  'Release {tag}'")
+        # ── 2. Commit ──────────────────────────────────────────────────────────────
+        run(['git', 'add', 'SKILL.md'], cwd=ROOT)
+        run(['git', 'commit', '-m', f'Release {tag}'], cwd=ROOT)
+        print(f"[2/5] Committed  'Release {tag}'")
+    else:
+        print(f"[1/5] SKILL.md already at version {version}")
+        print(f"[2/5] Skipped commit (no changes)")
 
     # ── 3. Annotated tag ───────────────────────────────────────────────────────
     run(['git', 'tag', '-a', tag, '-m', f'Release {tag}'], cwd=ROOT)
