@@ -20,13 +20,21 @@ If you cannot tell from the filename, ask the user.
 
 Use pdfplumber to extract text from PDFs. Install it if needed: `pip install pdfplumber --break-system-packages -q`
 
+For the order file, extract the following pre line item details:
+- **Our Code**: Product/item code used internally by us, typically a string with 6 digits (e.g. "071234") - usually the column name would be "Our Code" or simply "Code" - always included in the order file
+- **Supplier Code**: Product/item code used by the supplier, often alphanumeric (e.g. "ART.001", "SKU-1234") - usually the column name would be "Supplier Code", "Part Number" - very often this collumn is missing from the order file or empty
+- **Description**: Product/item description - this column is always included in the order file
+- **Quantity**: Numeric quantity ordered - this column is always included in the order file
+- **Total Price**: The total price for the line item (not unit price) — if only unit price is available, compute total = unit price * quantity
+
 If there are multiple confirmation files, extract line items from each one and merge them into a single list before proceeding — treat the merged list as one combined confirmation.
 
-For each file, extract the following per line item:
-- **Code**: Product/item code or reference number (e.g., "SKU-1234", "ART.001")
-- **Description**: Product name and/or specifications
-- **Quantity**: Numeric quantity ordered
-- **Unit Price**: Unit price per item
+For each file, extract the following per line item details:
+- **Our Code**: the Product/item code used internally by us, typically a string with 6 digits (e.g. "071234") - may be missing from the confirmation file 
+- **Supplier Code**: the Product/item code used by the supplier, often alphanumeric (e.g. "ART.001", "SKU-1234") - may be missing from the confirmation file
+- **Description**: Product name and/or specifications - always provided in the confirmation file
+- **Quantity**: Numeric quantity ordered - always provided in the confirmation file
+- **Total Price**: Total price for the line item - always provided in the confirmation file
 
 **Parsing tips:**
 - Tables in PDFs can be read with `page.extract_tables()` — prefer this over raw text when possible
@@ -43,15 +51,15 @@ Write a small Python script to do the extraction and print the results as JSON t
 Match each item from the Order to the corresponding item in the Confirmation:
 
 **Rule 1 – Match by Code (preferred)**
-If both the Order and Confirmation have a product code for an item, match on exact code (case-insensitive, ignoring spaces and dashes).
+If both the Order and Confirmation have our product code for an item, match on exact code. Alternatively if both have the supplier code, match on exact supplier code. If one document has both codes and the other document has only one of them, you can still match if the available code matches (e.g. if the Order has both "Our Code" and "Supplier Code" but the Confirmation only has "Supplier Code", you can match based on the supplier code). This is the most reliable method when codes are present. If you find a match by code, mark the match confidence as "code" — this will help the user spot reliable matches.
+
 
 **Rule 2 – Match by Description (fallback)**
 If the Confirmation has no code, or the code does not match anything in the Order, attempt to match by description. Use your expertise to identify the same product even when the description is phrased differently (e.g., "Stainless steel pipe 50mm" vs "PIPE SS 50MM"). Consider:
 - Key dimensions and specifications (diameter, length, material, grade)
 - Product category and type
 - Manufacturer codes embedded in the description
-
-Mark the match confidence as "code" or "description" — this will help the user spot uncertain matches.
+Mark the match confidence as "description" — this will help the user spot uncertain matches.
 
 **Unmatched items**
 - Items in the Order with no corresponding item in the Confirmation → report as unmatched (Confirmation columns empty)
@@ -86,18 +94,18 @@ Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
   "order_ref": "2025-1933",
   "mismatches": [
     {
-      "order_code":    "ART.001",      // primary code from the order (supplier code preferred; customer internal code otherwise)
-      "order_code2":   "CUST-001",     // optional: secondary code (e.g. customer internal code when supplier code is the primary). Omit if only one code exists.
-      "order_desc":    "Stainless pipe 50mm",
-      "order_qty":     10,
-      "order_price":   25.50,          // unit price; if only a line total is available, compute total / qty
-      "conf_code":     "ART.001",
-      "conf_code2":    null,           // omit or null if not present
-      "conf_desc":     "SS Pipe 50mm",
-      "conf_qty":      8,
-      "conf_price":    27.00,
-      "match_type":    "Code",         // "Code", "Description", or "Unmatched"
-      "desc_mismatch": false           // true only when matched by code but descriptions suggest a different product (see Step 4)
+      "order_our_code":       "071203", // our internal product code from the order file; if missing, set to null
+      "order_supplier_code":  "CUST-001", //supplier product code from the order file; if missing, set to null
+      "order_desc":           "Stainless pipe 50mm", // the description of the item from the order file
+      "order_qty":            10, //quantity from the order file
+      "order_price":          25.50, // total price/amount for the item from the order file
+      "conf_our_code":        "071203", // our internal product code from the confirmation file; if missing, set to null 
+      "conf_supplier_code":   "CUST-001", // supplier product code from the confirmation file; if missing, set to null
+      "conf_desc":            "SS Pipe 50mm", // the description of the item from the confirmation file
+      "conf_qty":             8, // quantity from the confirmation file
+      "conf_price":           27.00, // total price/amount for the item from the confirmation file
+      "match_type":           "Our Code", // "Our Code", "Supplier Code", "Description", or "Unmatched"
+      "desc_mismatch":        false // true only when matched by code but descriptions suggest a different product (see Step 4)
     }
   ],
   "matches": [
@@ -105,9 +113,9 @@ Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
   ],
   "extra_in_confirmation": [
     {
-      "conf_code":  "ART.999",
-      "conf_code2": null,
-      "conf_desc":  "Extra item not in order",
+      "conf_our_code":  "123544",
+      "conf_supplier_code": "ART.999",
+      "conf_desc":  "Stainless pipe 50mm",
       "conf_qty":   5,
       "conf_price": 12.00
     }
@@ -116,7 +124,8 @@ Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
 ```
 
 **Field mapping notes:**
-- `order_code` / `conf_code`: whichever code best identifies the item across both documents (typically the supplier/manufacturer code). If one document uses supplier codes and the other customer codes, put the supplier code in `order_code`/`conf_code` and the customer code in `order_code2`/`conf_code2`.
+- `order_our_code` / `conf_our_code`: map our internal code in the order to the internal code in the confirmation. This is typically the code that best identifies the item across both documents (typically the supplier/manufacturer code). 
+- `order_supplier_code`/`conf_supplier_code`: map the supplier's code in the order to the supplier's code in the confirmation. If the order file doesn't have a supplier code column, set `order_supplier_code` to null for all items. If the confirmation file doesn't have a supplier code column, set `conf_supplier_code` to null for all items. 
 - `order_price` / `conf_price`: unit price. If the document only shows a line total, divide by qty. If qty is zero or ambiguous, store the total as-is and note it in the description.
 - `desc_mismatch`: set `true` only when the AI judges the descriptions refer to a genuinely different product (see Step 4). Do not set for stylistic variants.
 
