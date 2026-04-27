@@ -12,28 +12,29 @@ Input JSON format:
   "order_ref": "2025-1933",
   "mismatches": [
     {
-      "order_code": "ART.001",
-      "order_desc": "Stainless pipe 50mm",
-      "order_qty": 10,
-      "order_price": 25.50,
-      "conf_code": "ART.001",
-      "conf_desc": "SS Pipe 50mm",
-      "conf_qty": 8,
-      "conf_price": 25.50,
-      "match_type": "Code"   // "Code", "Description", or "Unmatched"
+      "order_code":    "ART.001",      // primary code from the order (supplier or customer code)
+      "order_code2":   "CUST-001",     // optional secondary code (e.g. customer internal code)
+      "order_desc":    "Stainless pipe 50mm",
+      "order_qty":     10,
+      "order_price":   25.50,          // unit price, or total if unit is unavailable
+      "conf_code":     "ART.001",
+      "conf_code2":    null,           // omit or null if not present
+      "conf_desc":     "SS Pipe 50mm",
+      "conf_qty":      8,
+      "conf_price":    27.00,
+      "match_type":    "Code",         // "Code", "Description", or "Unmatched"
+      "desc_mismatch": false           // true when matched by code but descriptions suggest different product
     }
   ],
   "matches": [
-    {
-      "order_code": "ART.002",
-      ...same fields...
-    }
+    { ...same fields... }
   ],
   "extra_in_confirmation": [
     {
-      "conf_code": "ART.999",
-      "conf_desc": "Extra item not in order",
-      "conf_qty": 5,
+      "conf_code":  "ART.999",
+      "conf_code2": null,
+      "conf_desc":  "Extra item not in order",
+      "conf_qty":   5,
       "conf_price": 12.00
     }
   ]
@@ -56,16 +57,26 @@ UNMATCHED_FILL    = PatternFill("solid", fgColor="FFF0CC")
 SUMMARY_FILL      = PatternFill("solid", fgColor="EEF2FF")
 EXTRA_FILL        = PatternFill("solid", fgColor="FFE4B5")
 
-WHITE_BOLD = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-NORMAL     = Font(name="Arial", size=10)
-BOLD       = Font(name="Arial", size=10, bold=True)
+WHITE_BOLD   = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+NORMAL       = Font(name="Arial", size=10)
+BOLD         = Font(name="Arial", size=10, bold=True)
 SUMMARY_FONT = Font(name="Arial", size=10, bold=True, color="1A237E")
+DIFF_FONT    = Font(name="Arial", size=10, bold=True, color="880000")
 
+# 11 columns: primary code, secondary code, description, qty, price — for each side, plus match type
 HEADERS = [
-    "Code (Order)", "Description (Order)", "Qty (Order)", "Price (Order)",
-    "Code (Confirm.)", "Description (Confirm.)", "Qty (Confirm.)", "Price (Confirm.)",
+    "Code (Order)", "Code 2 (Order)", "Description (Order)", "Qty (Order)", "Price (Order)",
+    "Code (Confirm.)", "Code 2 (Confirm.)", "Description (Confirm.)", "Qty (Confirm.)", "Price (Confirm.)",
     "Match Type"
 ]
+
+# Column positions (1-based) for field types — update here if HEADERS ever changes
+COL_DESC_ORDER   = 3
+COL_QTY_ORDER    = 4
+COL_PRICE_ORDER  = 5
+COL_DESC_CONF    = 8
+COL_QTY_CONF     = 9
+COL_PRICE_CONF   = 10
 
 THIN = Side(style="thin", color="CCCCCC")
 THIN_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -80,36 +91,45 @@ def _write_header(ws, row, fill):
         cell.border = THIN_BORDER
 
 
-def _write_data_row(ws, row, item, row_fill, highlight_qty=False, highlight_price=False, extra=False):
+def _write_data_row(ws, row, item, row_fill,
+                    highlight_qty=False, highlight_price=False,
+                    highlight_desc=False, extra=False):
     values = [
-        item.get("order_code", ""),
-        item.get("order_desc", ""),
-        item.get("order_qty", ""),
-        item.get("order_price", ""),
-        item.get("conf_code", ""),
-        item.get("conf_desc", ""),
-        item.get("conf_qty", ""),
-        item.get("conf_price", ""),
-        item.get("match_type", ""),
+        item.get("order_code",   ""),
+        item.get("order_code2",  "") or "",
+        item.get("order_desc",   ""),
+        item.get("order_qty",    ""),
+        item.get("order_price",  ""),
+        item.get("conf_code",    ""),
+        item.get("conf_code2",   "") or "",
+        item.get("conf_desc",    ""),
+        item.get("conf_qty",     ""),
+        item.get("conf_price",   ""),
+        item.get("match_type",   ""),
     ]
+    diff_cols = set()
+    if highlight_desc:
+        diff_cols |= {COL_DESC_ORDER, COL_DESC_CONF}
+    if highlight_qty:
+        diff_cols |= {COL_QTY_ORDER, COL_QTY_CONF}
+    if highlight_price:
+        diff_cols |= {COL_PRICE_ORDER, COL_PRICE_CONF}
+
     for col, val in enumerate(values, start=1):
         cell = ws.cell(row=row, column=col, value=val)
-        cell.font = NORMAL
-        cell.fill = row_fill
         cell.border = THIN_BORDER
         cell.alignment = Alignment(vertical="center")
-        # Highlight the specific differing cells
-        if highlight_qty and col in (3, 7):   # Qty columns
+        if col in diff_cols:
             cell.fill = CELL_DIFF_FILL
-            cell.font = Font(name="Arial", size=10, bold=True, color="880000")
-        if highlight_price and col in (4, 8): # Price columns
-            cell.fill = CELL_DIFF_FILL
-            cell.font = Font(name="Arial", size=10, bold=True, color="880000")
+            cell.font = DIFF_FONT
+        else:
+            cell.fill = row_fill
+            cell.font = NORMAL
 
-    # Number formatting for qty and price columns
-    for col in (3, 7):
+    # Number formatting
+    for col in (COL_QTY_ORDER, COL_QTY_CONF):
         ws.cell(row=row, column=col).number_format = "#,##0.##"
-    for col in (4, 8):
+    for col in (COL_PRICE_ORDER, COL_PRICE_CONF):
         ws.cell(row=row, column=col).number_format = "#,##0.00"
 
 
@@ -171,19 +191,21 @@ def build(data: dict, output_path: str):
         for item in mismatches:
             is_unmatched = item.get("match_type") == "Unmatched"
             row_fill = UNMATCHED_FILL if is_unmatched else ROW_MISMATCH_FILL
-            # Detect which fields differ
+
             try:
-                qty_diff   = float(item.get("order_qty") or 0) != float(item.get("conf_qty") or 0)
+                qty_diff = float(item.get("order_qty") or 0) != float(item.get("conf_qty") or 0)
             except (TypeError, ValueError):
                 qty_diff = item.get("order_qty") != item.get("conf_qty")
             try:
                 price_diff = abs(float(item.get("order_price") or 0) - float(item.get("conf_price") or 0)) >= 0.01
             except (TypeError, ValueError):
                 price_diff = item.get("order_price") != item.get("conf_price")
+            desc_diff = bool(item.get("desc_mismatch")) and not is_unmatched
 
             _write_data_row(ws, current_row, item, row_fill,
                             highlight_qty=qty_diff and not is_unmatched,
-                            highlight_price=price_diff and not is_unmatched)
+                            highlight_price=price_diff and not is_unmatched,
+                            highlight_desc=desc_diff)
             ws.row_dimensions[current_row].height = 18
             current_row += 1
 
@@ -217,15 +239,17 @@ def build(data: dict, output_path: str):
         current_row += 1
         for item in extras:
             extra_item = {
-                "order_code": "",
-                "order_desc": "",
-                "order_qty": "",
-                "order_price": "",
-                "conf_code":  item.get("conf_code", ""),
-                "conf_desc":  item.get("conf_desc", ""),
-                "conf_qty":   item.get("conf_qty", ""),
-                "conf_price": item.get("conf_price", ""),
-                "match_type": "Extra",
+                "order_code":   "",
+                "order_code2":  "",
+                "order_desc":   "",
+                "order_qty":    "",
+                "order_price":  "",
+                "conf_code":    item.get("conf_code",   ""),
+                "conf_code2":   item.get("conf_code2",  "") or "",
+                "conf_desc":    item.get("conf_desc",   ""),
+                "conf_qty":     item.get("conf_qty",    ""),
+                "conf_price":   item.get("conf_price",  ""),
+                "match_type":   "Extra",
             }
             _write_data_row(ws, current_row, extra_item, EXTRA_FILL)
             current_row += 1

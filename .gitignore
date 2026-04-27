@@ -1,1 +1,4 @@
 data/*
+releases/*
+.venv/*
+scripts/__pycache__/*

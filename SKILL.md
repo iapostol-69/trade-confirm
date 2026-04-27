@@ -60,40 +60,63 @@ Mark the match confidence as "code" or "description" — this will help the user
 For each matched pair, compare:
 - **Quantity**: Flag if Order qty ≠ Confirmation qty
 - **Price**: Flag if Order price ≠ Confirmation price (treat values as floats; ignore minor rounding differences < 0.01)
+- **Description** (code-matched items only): When two items were matched by product code, also compare their descriptions using the same semantic/fuzzy methodology described in Step 3 Rule 2. If you determine the descriptions refer to different products or meaningfully different specifications (e.g. different material, grade, size, or product type), flag as a discrepancy and set `desc_mismatch: true` on the item. This catches cases where a supplier reuses a code for a different product. If the descriptions are just stylistic variants of the same item (abbreviations, different word order, language differences), do **not** flag — only flag when a procurement officer would genuinely need to investigate further.
 
-A row is a **mismatch** if quantity OR price differs, OR if the item is unmatched.
-A row is a **match** if both quantity and price agree.
+A row is a **mismatch** if quantity OR price differs, OR if the item is unmatched, OR if items were matched by code but their descriptions don't match.
+A row is a **match** if both quantity and price agree **and** descriptions are consistent (or were matched by description).
 
 ## Step 5 – Create the Excel output
 
-Use `openpyxl` to build the Excel file. Install if needed: `pip install openpyxl --break-system-packages -q`
+**IMPORTANT: You MUST generate the Excel file by calling `scripts/build_reconciliation.py`. Do NOT write custom openpyxl code — all formatting, column layout, and cell-level highlighting logic lives in that script. Bypassing it will produce an output with no cell-level highlighting.**
 
-Use the bundled helper script at `scripts/build_reconciliation.py` to generate the Excel file. Read it first and adapt the call as needed for your data.
+Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
 
-### Excel structure
+### How to call the script
 
-**Sheet name:** "Reconciliation"
+1. Build your reconciliation data as a Python dict matching the JSON schema below.
+2. Write it to a temporary JSON file (e.g. `/tmp/rec_data.json`).
+3. Call the script: `python scripts/build_reconciliation.py /tmp/rec_data.json <output.xlsx>`
 
-**Section 1 – Mismatches** (rows that differ or are unmatched)
-Header row (bold, dark background, white text):
+### JSON schema
 
-| Code (Order) | Description (Order) | Qty (Order) | Price (Order) | Code (Confirm.) | Description (Confirm.) | Qty (Confirm.) | Price (Confirm.) | Match Type |
+```json
+{
+  "order_ref": "2025-1933",
+  "mismatches": [
+    {
+      "order_code":    "ART.001",      // primary code from the order (supplier code preferred; customer internal code otherwise)
+      "order_code2":   "CUST-001",     // optional: secondary code (e.g. customer internal code when supplier code is the primary). Omit if only one code exists.
+      "order_desc":    "Stainless pipe 50mm",
+      "order_qty":     10,
+      "order_price":   25.50,          // unit price; if only a line total is available, compute total / qty
+      "conf_code":     "ART.001",
+      "conf_code2":    null,           // omit or null if not present
+      "conf_desc":     "SS Pipe 50mm",
+      "conf_qty":      8,
+      "conf_price":    27.00,
+      "match_type":    "Code",         // "Code", "Description", or "Unmatched"
+      "desc_mismatch": false           // true only when matched by code but descriptions suggest a different product (see Step 4)
+    }
+  ],
+  "matches": [
+    { "...same fields..." }
+  ],
+  "extra_in_confirmation": [
+    {
+      "conf_code":  "ART.999",
+      "conf_code2": null,
+      "conf_desc":  "Extra item not in order",
+      "conf_qty":   5,
+      "conf_price": 12.00
+    }
+  ]
+}
+```
 
-**Section 2 – Matches** (rows where qty and price agree)
-Same columns as Section 1. A blank separator row between the two sections.
-
-### Formatting rules
-- **Section 1 header**: Fill `FF4444` (red), white bold text
-- **Section 2 header**: Fill `44AA44` (green), white bold text
-- **Mismatch rows**: Light red background `FFE0E0` on the differing cells (Qty or Price columns only)
-- **Match rows**: Light green background `E0FFE0`
-- **Unmatched items** (no confirmation): Orange background `FFF0CC` on entire row
-- **Match Type column**: Show "Code" (exact code match), "Description" (fuzzy description match), or "Unmatched"
-- Column widths: auto-fit to content (min 12, max 50)
-- Freeze the top rows so headers stay visible when scrolling
-- Use Arial 10pt font throughout
-- Currency values: format as `#,##0.00`
-- Add a **Summary row** at the very top (above Section 1 header): "Total items: X | Mismatches: Y | Matches: Z | Unmatched: W"
+**Field mapping notes:**
+- `order_code` / `conf_code`: whichever code best identifies the item across both documents (typically the supplier/manufacturer code). If one document uses supplier codes and the other customer codes, put the supplier code in `order_code`/`conf_code` and the customer code in `order_code2`/`conf_code2`.
+- `order_price` / `conf_price`: unit price. If the document only shows a line total, divide by qty. If qty is zero or ambiguous, store the total as-is and note it in the description.
+- `desc_mismatch`: set `true` only when the AI judges the descriptions refer to a genuinely different product (see Step 4). Do not set for stylistic variants.
 
 ### Output filename
 Save as: `Trade_Confirm_<order_ref>.xlsx` where `<order_ref>` is extracted from the order filename (e.g., "2025-1933" from "2025-1933 OUR ORDER SIDERINOX.pdf").
