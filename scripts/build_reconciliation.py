@@ -12,30 +12,30 @@ Input JSON format:
   "order_ref": "2025-1933",
   "mismatches": [
     {
-      "order_code":    "ART.001",      // primary code from the order (supplier or customer code)
-      "order_code2":   "CUST-001",     // optional secondary code (e.g. customer internal code)
-      "order_desc":    "Stainless pipe 50mm",
-      "order_qty":     10,
-      "order_price":   25.50,          // unit price, or total if unit is unavailable
-      "conf_code":     "ART.001",
-      "conf_code2":    null,           // omit or null if not present
-      "conf_desc":     "SS Pipe 50mm",
-      "conf_qty":      8,
-      "conf_price":    27.00,
-      "match_type":    "Code",         // "Code", "Description", or "Unmatched"
-      "desc_mismatch": false           // true when matched by code but descriptions suggest different product
+      "order_our_code":      "071203",   // our internal product code from the order file; null if missing
+      "order_supplier_code": "CUST-001", // supplier product code from the order file; null if missing
+      "order_desc":          "Stainless pipe 50mm",
+      "order_qty":           10,
+      "order_price":         25.50,      // unit price; divide line total by qty if needed
+      "conf_our_code":       "071203",   // our internal product code from the confirmation; null if missing
+      "conf_supplier_code":  "CUST-001", // supplier product code from the confirmation; null if missing
+      "conf_desc":           "SS Pipe 50mm",
+      "conf_qty":            8,
+      "conf_price":          27.00,
+      "match_type":          "Our Code", // "Our Code", "Supplier Code", "Description", or "Unmatched"
+      "desc_mismatch":       false       // true when matched by code but descriptions suggest different product
     }
   ],
   "matches": [
-    { ...same fields... }
+    { "...same fields..." }
   ],
   "extra_in_confirmation": [
     {
-      "conf_code":  "ART.999",
-      "conf_code2": null,
-      "conf_desc":  "Extra item not in order",
-      "conf_qty":   5,
-      "conf_price": 12.00
+      "conf_our_code":      "123544",
+      "conf_supplier_code": "ART.999",
+      "conf_desc":          "Extra item not in order",
+      "conf_qty":           5,
+      "conf_price":         12.00
     }
   ]
 }
@@ -48,25 +48,23 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 # ---------- Colors ----------
-RED_HEADER_FILL   = PatternFill("solid", fgColor="CC3333")
-GREEN_HEADER_FILL = PatternFill("solid", fgColor="2E7D32")
-ROW_MISMATCH_FILL = PatternFill("solid", fgColor="FFCCCC")
-ROW_MATCH_FILL    = PatternFill("solid", fgColor="CCFFCC")
-CELL_DIFF_FILL    = PatternFill("solid", fgColor="FF6666")  # specific differing cell
-UNMATCHED_FILL    = PatternFill("solid", fgColor="FFF0CC")
-SUMMARY_FILL      = PatternFill("solid", fgColor="EEF2FF")
-EXTRA_FILL        = PatternFill("solid", fgColor="FFE4B5")
+RED_HEADER_FILL   = PatternFill("solid", fgColor="FFCC3333")
+GREEN_HEADER_FILL = PatternFill("solid", fgColor="FF2E7D32")
+ROW_MISMATCH_FILL = PatternFill("solid", fgColor="FFFFCCCC")
+ROW_MATCH_FILL    = PatternFill("solid", fgColor="FFCCFFCC")
+CELL_DIFF_FILL    = PatternFill("solid", fgColor="FFFF6666")
+UNMATCHED_FILL    = PatternFill("solid", fgColor="FFFFF0CC")
+SUMMARY_FILL      = PatternFill("solid", fgColor="FFEEF2FF")
+EXTRA_FILL        = PatternFill("solid", fgColor="FFFFE4B5")
 
-WHITE_BOLD   = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-NORMAL       = Font(name="Arial", size=10)
-BOLD         = Font(name="Arial", size=10, bold=True)
-SUMMARY_FONT = Font(name="Arial", size=10, bold=True, color="1A237E")
-DIFF_FONT    = Font(name="Arial", size=10, bold=True, color="880000")
+WHITE_BOLD   = Font(name="Arial", size=10, bold=True, color="FFFFFFFF")
+SUMMARY_FONT = Font(name="Arial", size=10, bold=True, color="FF1A237E")
+DIFF_FONT    = Font(name="Arial", size=10, bold=True, color="FF880000")
 
 # 11 columns: primary code, secondary code, description, qty, price — for each side, plus match type
 HEADERS = [
-    "Code (Order)", "Code 2 (Order)", "Description (Order)", "Qty (Order)", "Price (Order)",
-    "Code (Confirm.)", "Code 2 (Confirm.)", "Description (Confirm.)", "Qty (Confirm.)", "Price (Confirm.)",
+    "Our Code (Order)", "Supplier Code (Order)", "Description (Order)", "Qty (Order)", "Price (Order)",
+    "Our Code (Confirm.)", "Supplier Code (Confirm.)", "Description (Confirm.)", "Qty (Confirm.)", "Price (Confirm.)",
     "Match Type"
 ]
 
@@ -95,17 +93,17 @@ def _write_data_row(ws, row, item, row_fill,
                     highlight_qty=False, highlight_price=False,
                     highlight_desc=False, extra=False):
     values = [
-        item.get("order_code",   ""),
-        item.get("order_code2",  "") or "",
-        item.get("order_desc",   ""),
-        item.get("order_qty",    ""),
-        item.get("order_price",  ""),
-        item.get("conf_code",    ""),
-        item.get("conf_code2",   "") or "",
-        item.get("conf_desc",    ""),
-        item.get("conf_qty",     ""),
-        item.get("conf_price",   ""),
-        item.get("match_type",   ""),
+        item.get("order_our_code",      "") or "",
+        item.get("order_supplier_code", "") or "",
+        item.get("order_desc",          ""),
+        item.get("order_qty",           ""),
+        item.get("order_price",         ""),
+        item.get("conf_our_code",       "") or "",
+        item.get("conf_supplier_code",  "") or "",
+        item.get("conf_desc",           ""),
+        item.get("conf_qty",            ""),
+        item.get("conf_price",          ""),
+        item.get("match_type",          ""),
     ]
     diff_cols = set()
     if highlight_desc:
@@ -239,17 +237,17 @@ def build(data: dict, output_path: str):
         current_row += 1
         for item in extras:
             extra_item = {
-                "order_code":   "",
-                "order_code2":  "",
-                "order_desc":   "",
-                "order_qty":    "",
-                "order_price":  "",
-                "conf_code":    item.get("conf_code",   ""),
-                "conf_code2":   item.get("conf_code2",  "") or "",
-                "conf_desc":    item.get("conf_desc",   ""),
-                "conf_qty":     item.get("conf_qty",    ""),
-                "conf_price":   item.get("conf_price",  ""),
-                "match_type":   "Extra",
+                "order_our_code":      "",
+                "order_supplier_code": "",
+                "order_desc":          "",
+                "order_qty":           "",
+                "order_price":         "",
+                "conf_our_code":       item.get("conf_our_code",      "") or "",
+                "conf_supplier_code":  item.get("conf_supplier_code", "") or "",
+                "conf_desc":           item.get("conf_desc",          ""),
+                "conf_qty":            item.get("conf_qty",           ""),
+                "conf_price":          item.get("conf_price",         ""),
+                "match_type":          "Extra",
             }
             _write_data_row(ws, current_row, extra_item, EXTRA_FILL)
             current_row += 1
