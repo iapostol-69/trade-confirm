@@ -1,6 +1,6 @@
 ---
 name: trade-confirm
-description: "Reconcile a purchase order against a supplier order confirmation, matching line items and highlighting discrepancies. Use this skill whenever the user wants to compare an order they sent to a supplier with the confirmation received back — even if they phrase it as 'check the supplier confirmation', 'does the OC match our order', 'reconcile the PO and OC', or 'compare the order and the confirmation'. The skill accepts two PDF (or Excel) files as input and produces a formatted Excel file with two sections: mismatches first (highlighted), then matching items. Trigger for any procurement reconciliation, PO vs OC comparison, supplier order check, or trade confirmation task."
+description: "Reconcile a purchase order against a supplier order confirmation, matching line items and highlighting discrepancies. Use this skill whenever the user wants to compare an order they sent to a supplier with the confirmation received back — even if they phrase it as 'check the supplier confirmation', 'does the OC match our order', 'reconcile the PO and OC', or 'compare the order and the confirmation'. The skill accepts one order file and one or more confirmation files (PDF or Excel) as input and produces a formatted Excel file with two sections: mismatches first (highlighted), then matching items. Trigger for any procurement reconciliation, PO vs OC comparison, supplier order check, or trade confirmation task."
 version: 0.2
 ---
 
@@ -10,7 +10,7 @@ You are acting as a procurement expert. Your job is to compare a purchase order 
 
 ## Step 1 – Identify the input files
 
-The user will provide two files. Identify which is the order and which is the confirmation. Common naming patterns:
+The user will provide one order file and one or more confirmation files (suppliers sometimes split their confirmation across multiple files). Identify which file belongs to the order and which file(s) belong to the confirmation. Common naming patterns:
 - Order: "OUR ORDER", "PO", "ITM", "ORDER" in the filename
 - Confirmation: "OC", "CONFIRMATION", "CONF" in the filename
 
@@ -19,6 +19,8 @@ If you cannot tell from the filename, ask the user.
 ## Step 2 – Extract line items from each file
 
 Use pdfplumber to extract text from PDFs. Install it if needed: `pip install pdfplumber --break-system-packages -q`
+
+If there are multiple confirmation files, extract line items from each one and merge them into a single list before proceeding — treat the merged list as one combined confirmation.
 
 For each file, extract the following per line item:
 - **Code**: Product/item code or reference number (e.g., "SKU-1234", "ART.001")
