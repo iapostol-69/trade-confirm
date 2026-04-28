@@ -85,8 +85,9 @@ Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
 ### How to call the script
 
 1. Build your reconciliation data as a Python dict matching the JSON schema below.
-2. Write it to a temporary JSON file (e.g. `/tmp/rec_data.json`).
-3. Call the script: `python scripts/build_reconciliation.py /tmp/rec_data.json <output.xlsx>`
+2. Write it to a temporary JSON file (e.g. `/tmp/rec_data{<order_ref>}.json`) where `<order_ref>` is extracted from the order filename (e.g., "2025-1933" from "2025-1933 OUR ORDER SIDERINOX.pdf").
+3. Call the script: `python scripts/build_reconciliation.py /tmp/rec_data{<order_ref>}.json <output.xlsx>`
+4. **Delete the temporary JSON file after generating the Excel. Do not leave intermediate files behind.**
 
 ### JSON schema
 
