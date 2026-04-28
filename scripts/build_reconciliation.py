@@ -16,12 +16,12 @@ Input JSON format:
       "order_supplier_code": "CUST-001", // supplier product code from the order file; null if missing
       "order_desc":          "Stainless pipe 50mm",
       "order_qty":           10,
-      "order_price":         25.50,      // unit price; divide line total by qty if needed
+      "order_amount":        25.50,      // total amount for the line item
       "conf_our_code":       "071203",   // our internal product code from the confirmation; null if missing
       "conf_supplier_code":  "CUST-001", // supplier product code from the confirmation; null if missing
       "conf_desc":           "SS Pipe 50mm",
       "conf_qty":            8,
-      "conf_price":          27.00,
+      "conf_amount":         27.00,
       "match_type":          "Our Code", // "Our Code", "Supplier Code", "Description", or "Unmatched"
       "desc_mismatch":       false       // true when matched by code but descriptions suggest different product
     }
@@ -35,7 +35,7 @@ Input JSON format:
       "conf_supplier_code": "ART.999",
       "conf_desc":          "Extra item not in order",
       "conf_qty":           5,
-      "conf_price":         12.00
+      "conf_amount":        12.00
     }
   ]
 }
@@ -61,20 +61,20 @@ WHITE_BOLD   = Font(name="Arial", size=10, bold=True, color="FFFFFFFF")
 SUMMARY_FONT = Font(name="Arial", size=10, bold=True, color="FF1A237E")
 DIFF_FONT    = Font(name="Arial", size=10, bold=True, color="FF880000")
 
-# 11 columns: primary code, secondary code, description, qty, price — for each side, plus match type
+# 11 columns: primary code, secondary code, description, qty, amount — for each side, plus match type
 HEADERS = [
-    "Our Code (Order)", "Supplier Code (Order)", "Description (Order)", "Qty (Order)", "Price (Order)",
-    "Our Code (Confirm.)", "Supplier Code (Confirm.)", "Description (Confirm.)", "Qty (Confirm.)", "Price (Confirm.)",
+    "Our Code (Order)", "Supplier Code (Order)", "Description (Order)", "Qty (Order)", "Amount (Order)",
+    "Our Code (Confirm.)", "Supplier Code (Confirm.)", "Description (Confirm.)", "Qty (Confirm.)", "Amount (Confirm.)",
     "Match Type"
 ]
 
 # Column positions (1-based) for field types — update here if HEADERS ever changes
 COL_DESC_ORDER   = 3
 COL_QTY_ORDER    = 4
-COL_PRICE_ORDER  = 5
+COL_AMOUNT_ORDER = 5
 COL_DESC_CONF    = 8
 COL_QTY_CONF     = 9
-COL_PRICE_CONF   = 10
+COL_AMOUNT_CONF  = 10
 
 THIN = Side(style="thin", color="CCCCCC")
 THIN_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -90,19 +90,19 @@ def _write_header(ws, row, fill):
 
 
 def _write_data_row(ws, row, item, row_fill,
-                    highlight_qty=False, highlight_price=False,
+                    highlight_qty=False, highlight_amount=False,
                     highlight_desc=False, extra=False):
     values = [
         item.get("order_our_code",      "") or "",
         item.get("order_supplier_code", "") or "",
         item.get("order_desc",          ""),
         item.get("order_qty",           ""),
-        item.get("order_price",         ""),
+        item.get("order_amount",        ""),
         item.get("conf_our_code",       "") or "",
         item.get("conf_supplier_code",  "") or "",
         item.get("conf_desc",           ""),
         item.get("conf_qty",            ""),
-        item.get("conf_price",          ""),
+        item.get("conf_amount",         ""),
         item.get("match_type",          ""),
     ]
     diff_cols = set()
@@ -110,8 +110,8 @@ def _write_data_row(ws, row, item, row_fill,
         diff_cols |= {COL_DESC_ORDER, COL_DESC_CONF}
     if highlight_qty:
         diff_cols |= {COL_QTY_ORDER, COL_QTY_CONF}
-    if highlight_price:
-        diff_cols |= {COL_PRICE_ORDER, COL_PRICE_CONF}
+    if highlight_amount:
+        diff_cols |= {COL_AMOUNT_ORDER, COL_AMOUNT_CONF}
 
     for col, val in enumerate(values, start=1):
         cell = ws.cell(row=row, column=col, value=val)
@@ -127,7 +127,7 @@ def _write_data_row(ws, row, item, row_fill,
     # Number formatting
     for col in (COL_QTY_ORDER, COL_QTY_CONF):
         ws.cell(row=row, column=col).number_format = "#,##0.##"
-    for col in (COL_PRICE_ORDER, COL_PRICE_CONF):
+    for col in (COL_AMOUNT_ORDER, COL_AMOUNT_CONF):
         ws.cell(row=row, column=col).number_format = "#,##0.00"
 
 
@@ -195,14 +195,14 @@ def build(data: dict, output_path: str):
             except (TypeError, ValueError):
                 qty_diff = item.get("order_qty") != item.get("conf_qty")
             try:
-                price_diff = abs(float(item.get("order_price") or 0) - float(item.get("conf_price") or 0)) >= 0.01
+                amount_diff = abs(float(item.get("order_amount") or 0) - float(item.get("conf_amount") or 0)) >= 0.01
             except (TypeError, ValueError):
-                price_diff = item.get("order_price") != item.get("conf_price")
+                amount_diff = item.get("order_amount") != item.get("conf_amount")
             desc_diff = bool(item.get("desc_mismatch")) and not is_unmatched
 
             _write_data_row(ws, current_row, item, row_fill,
                             highlight_qty=qty_diff and not is_unmatched,
-                            highlight_price=price_diff and not is_unmatched,
+                            highlight_amount=amount_diff and not is_unmatched,
                             highlight_desc=desc_diff)
             ws.row_dimensions[current_row].height = 18
             current_row += 1
@@ -241,12 +241,12 @@ def build(data: dict, output_path: str):
                 "order_supplier_code": "",
                 "order_desc":          "",
                 "order_qty":           "",
-                "order_price":         "",
+                "order_amount":        "",
                 "conf_our_code":       item.get("conf_our_code",      "") or "",
                 "conf_supplier_code":  item.get("conf_supplier_code", "") or "",
                 "conf_desc":           item.get("conf_desc",          ""),
                 "conf_qty":            item.get("conf_qty",           ""),
-                "conf_price":          item.get("conf_price",         ""),
+                "conf_amount":         item.get("conf_amount",        ""),
                 "match_type":          "Extra",
             }
             _write_data_row(ws, current_row, extra_item, EXTRA_FILL)

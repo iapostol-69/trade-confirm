@@ -1,5 +1,5 @@
 ---
-name: trade-confirm
+name: order-confirm-rec
 description: "Reconcile a purchase order against a supplier order confirmation, matching line items and highlighting discrepancies. Use this skill whenever the user wants to compare an order they sent to a supplier with the confirmation received back — even if they phrase it as 'check the supplier confirmation', 'does the OC match our order', 'reconcile the PO and OC', or 'compare the order and the confirmation'. The skill accepts one order file and one or more confirmation files (PDF or Excel) as input and produces a formatted Excel file with two sections: mismatches first (highlighted), then matching items. Trigger for any procurement reconciliation, PO vs OC comparison, supplier order check, or trade confirmation task."
 version: 0.7
 ---
@@ -16,6 +16,8 @@ The user will provide one order file and one or more confirmation files (supplie
 
 If you cannot tell from the filename, ask the user.
 
+The folder may have other files (e.g. offer) that are not relevant — ignore these.
+
 ## Step 2 – Extract line items from each file
 
 For Excel files (.xlsx, .xls): Read directly with openpyxl. Do not use the PDF helper scripts.
@@ -29,7 +31,7 @@ For the order file, extract the following pre line item details:
 - **Supplier Code**: Product/item code used by the supplier, often alphanumeric (e.g. "ART.001", "SKU-1234") - usually the column name would be "Supplier Code", "Part Number" - very often this collumn is missing from the order file or empty
 - **Description**: Product/item description - this column is always included in the order file
 - **Quantity**: Numeric quantity ordered - this column is always included in the order file
-- **Total Price**: The total price for the line item (not unit price) — if only unit price is available, compute total = unit price * quantity
+- **Amount**: The total amount for the line item — if only unit price is available, compute amount = unit price * quantity, otherwise leave empty. This column is often missing from the order file.
 
 If there are multiple confirmation files, extract line items from each one and merge them into a single list before proceeding — treat the merged list as one combined confirmation.
 
@@ -38,7 +40,7 @@ For each file, extract the following per line item details:
 - **Supplier Code**: the Product/item code used by the supplier, often alphanumeric (e.g. "ART.001", "SKU-1234") - may be missing from the confirmation file
 - **Description**: Product name and/or specifications - always provided in the confirmation file
 - **Quantity**: Numeric quantity ordered - always provided in the confirmation file
-- **Total Price**: Total price for the line item - always provided in the confirmation file
+- **Amount**: The total amount for the line item - always provided in the confirmation file
 
 **Handling accessory sub-items (rows without a position/index number)**
 Some order formats include accessory or included-item rows that carry an internal or a supplier product code but have no position number and no explicit quantity. These are real ordered items and must not be skipped.
@@ -70,11 +72,11 @@ Mark the match confidence as "description" — this will help the user spot unce
 
 For each matched pair, compare:
 - **Quantity**: Flag if Order qty ≠ Confirmation qty
-- **Price**: if there is a price in the order (often it is not included in the order file), only then flag if Order price ≠ Confirmation price (treat values as floats; ignore minor rounding differences < 0.01)
+- **Amount**: if there is an amount in the order (often it is not included in the order file), only then flag if Order amount ≠ Confirmation amount (treat values as floats; ignore minor rounding differences < 0.01)
 - **Description** (code-matched items only): When two items were matched by product code, also compare their descriptions using the same semantic/fuzzy methodology described in Step 3 Rule 2. If you determine the descriptions refer to different products or meaningfully different specifications (e.g. different material, grade, size, or product type), flag as a discrepancy and set `desc_mismatch: true` on the item. This catches cases where a supplier reuses a code for a different product. If the descriptions are just stylistic variants of the same item (abbreviations, different word order, language differences), do **not** flag — only flag when a procurement officer would genuinely need to investigate further.
 
-A row is a **mismatch** if quantity OR price differs, OR if the item is unmatched, OR if items were matched by code but their descriptions don't match.
-A row is a **match** if both quantity and price agree **and** descriptions are consistent (or were matched by description).
+A row is a **mismatch** if quantity OR amount differs, OR if the item is unmatched, OR if items were matched by code but their descriptions don't match.
+A row is a **match** if both quantity and amount agree **and** descriptions are consistent (or were matched by description).
 
 ## Step 5 – Create the Excel output
 
@@ -100,12 +102,12 @@ Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
       "order_supplier_code":  "CUST-001", //supplier product code from the order file; if missing, set to null
       "order_desc":           "Stainless pipe 50mm", // the description of the item from the order file
       "order_qty":            10, //quantity from the order file
-      "order_price":          25.50, // total price/amount for the item from the order file
+      "order_amount":         25.50, // total amount for the item from the order file
       "conf_our_code":        "071203", // our internal product code from the confirmation file; if missing, set to null 
       "conf_supplier_code":   "CUST-001", // supplier product code from the confirmation file; if missing, set to null
       "conf_desc":            "SS Pipe 50mm", // the description of the item from the confirmation file
       "conf_qty":             8, // quantity from the confirmation file
-      "conf_price":           27.00, // total price/amount for the item from the confirmation file
+      "conf_amount":          27.00, // total amount for the item from the confirmation file
       "match_type":           "Our Code", // "Our Code", "Supplier Code", "Description", or "Unmatched"
       "desc_mismatch":        false // true only when matched by code but descriptions suggest a different product (see Step 4)
     }
@@ -119,7 +121,7 @@ Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
       "conf_supplier_code": "ART.999",
       "conf_desc":  "Stainless pipe 50mm",
       "conf_qty":   5,
-      "conf_price": 12.00
+      "conf_amount": 12.00
     }
   ]
 }
@@ -128,7 +130,7 @@ Install openpyxl if needed: `pip install openpyxl --break-system-packages -q`
 **Field mapping notes:**
 - `order_our_code` / `conf_our_code`: map our internal code in the order to the internal code in the confirmation. This is typically the code that best identifies the item across both documents (typically the supplier/manufacturer code). 
 - `order_supplier_code`/`conf_supplier_code`: map the supplier's code in the order to the supplier's code in the confirmation. If the order file doesn't have a supplier code column, set `order_supplier_code` to null for all items. If the confirmation file doesn't have a supplier code column, set `conf_supplier_code` to null for all items. 
-- `order_price` / `conf_price`: unit price. If the document only shows a line total, divide by qty. If qty is zero or ambiguous, store the total as-is and note it in the description.
+- `order_amount` / `conf_amount`: total amount for the line item. If the document only shows a line total, divide by qty. If qty is zero or ambiguous, store the total as-is and note it in the description.
 - `desc_mismatch`: set `true` only when the AI judges the descriptions refer to a genuinely different product (see Step 4). Do not set for stylistic variants.
 
 ### Output filename
@@ -140,7 +142,7 @@ Save to the same folder as the input files.
 
 After generating the file, briefly tell the user:
 - How many items were in the order
-- How many mismatches were found (and what kind: qty-only, price-only, both)
+- How many mismatches were found (and what kind: qty-only, amount-only, both)
 - How many items matched perfectly
 - Any items that appeared in the confirmation but not in the order
 
