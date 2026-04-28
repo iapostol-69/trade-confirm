@@ -18,7 +18,11 @@ If you cannot tell from the filename, ask the user.
 
 ## Step 2 – Extract line items from each file
 
-Use pdfplumber to extract text from PDFs. Install it if needed: `pip install pdfplumber --break-system-packages -q`
+For Excel files (.xlsx, .xls): Read directly with openpyxl. Do not use the PDF helper scripts.
+For PDF files: Run the helper script first:
+`python scripts/pdf_to_markdown.py <input.pdf> /tmp/<name>.md`
+Then read the resulting markdown file to understand the structure and extract line items. The script handles both bordered tables (rendered as markdown tables) and free-form columnar layouts (rendered as fenced code blocks). Work from the markdown output rather than writing custom pdfplumber code from scratch.
+Fallback – image-based PDFs: If pdf_to_markdown.py produces empty output or only whitespace (i.e. the PDF is a scanned image with no selectable text), do not attempt OCR via the script. Instead, read the PDF pages directly as images using the Read tool — Claude can interpret them visually — and extract the line items from what you see.
 
 For the order file, extract the following pre line item details:
 - **Our Code**: Product/item code used internally by us, typically a string with 6 digits (e.g. "071234") - usually the column name would be "Our Code" or simply "Code" - always included in the order file
@@ -36,15 +40,12 @@ For each file, extract the following per line item details:
 - **Quantity**: Numeric quantity ordered - always provided in the confirmation file
 - **Total Price**: Total price for the line item - always provided in the confirmation file
 
-**Parsing tips:**
-- Tables in PDFs can be read with `page.extract_tables()` — prefer this over raw text when possible
-- If tables are not well-structured, fall back to `page.extract_text()` and parse line-by-line
-- Look for common column headers like "Qty", "Quantity", "Pcs", "Price", "Unit Price", "€", "Code", "Ref", "Art."
-- Prices may include currency symbols (€, $) — strip these when storing numeric values
-- Quantities may include units ("pcs", "kg", "m") — store them separately or include in description
-- Line items may span multiple pages — collect all pages
+**Handling accessory sub-items (rows without a position/index number)**
+Some order formats include accessory or included-item rows that carry an internal or a supplier product code but have no position number and no explicit quantity. These are real ordered items and must not be skipped.
 
-Write a small Python script to do the extraction and print the results as JSON to stdout, so you can review them before proceeding.
+Extract them. Any row with an internal or a supplier product code and part number is a line item, regardless of whether it has a position number.
+Inherit the parent quantity. When a sub-item has no quantity, assign it the quantity of the nearest numbered line item above it in the file. The sub-item is understood to be included one-per-unit of the parent.
+Preserve all occurrences. The same part number may appear multiple times as a sub-item (once per parent). Do not collapse these into a single entry — keep each occurrence as a separate line and match them independently against the confirmation, one by one in sequence.
 
 ## Step 3 – Match line items
 
@@ -69,7 +70,7 @@ Mark the match confidence as "description" — this will help the user spot unce
 
 For each matched pair, compare:
 - **Quantity**: Flag if Order qty ≠ Confirmation qty
-- **Price**: Flag if Order price ≠ Confirmation price (treat values as floats; ignore minor rounding differences < 0.01)
+- **Price**: if there is a price in the order (often it is not included in the order file), only then flag if Order price ≠ Confirmation price (treat values as floats; ignore minor rounding differences < 0.01)
 - **Description** (code-matched items only): When two items were matched by product code, also compare their descriptions using the same semantic/fuzzy methodology described in Step 3 Rule 2. If you determine the descriptions refer to different products or meaningfully different specifications (e.g. different material, grade, size, or product type), flag as a discrepancy and set `desc_mismatch: true` on the item. This catches cases where a supplier reuses a code for a different product. If the descriptions are just stylistic variants of the same item (abbreviations, different word order, language differences), do **not** flag — only flag when a procurement officer would genuinely need to investigate further.
 
 A row is a **mismatch** if quantity OR price differs, OR if the item is unmatched, OR if items were matched by code but their descriptions don't match.
