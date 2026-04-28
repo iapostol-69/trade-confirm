@@ -1,7 +1,7 @@
 ---
 name: trade-confirm
 description: "Reconcile a purchase order against a supplier order confirmation, matching line items and highlighting discrepancies. Use this skill whenever the user wants to compare an order they sent to a supplier with the confirmation received back — even if they phrase it as 'check the supplier confirmation', 'does the OC match our order', 'reconcile the PO and OC', or 'compare the order and the confirmation'. The skill accepts one order file and one or more confirmation files (PDF or Excel) as input and produces a formatted Excel file with two sections: mismatches first (highlighted), then matching items. Trigger for any procurement reconciliation, PO vs OC comparison, supplier order check, or trade confirmation task."
-version: 0.5
+version: 0.6
 ---
 
 # Trade Confirm – Purchase Order vs. Order Confirmation Reconciliation
