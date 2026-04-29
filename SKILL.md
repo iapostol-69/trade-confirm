@@ -8,9 +8,13 @@ version: 0.9
 
 You are acting as a procurement expert. Your job is to compare a purchase order (PO) we sent to a supplier with the order confirmation (OC) they sent back, identify discrepancies, and produce a structured Excel reconciliation file.
 
-## Step 0 - print you version
+## Step 0 — Print your version
 
-When you start this skill, print your version number (e.g. "Trade Confirm Reconciliation v0.8") so that the user knows which version of the skill they are interacting with. This is important for tracking improvements and debugging issues.
+Before doing anything else, read the `version` field from this file's YAML frontmatter (at the top of SKILL.md) and print a one-line banner in the form:
+
+    Trade Confirm Reconciliation v<VERSION>
+
+where `<VERSION>` is the value you just read. Do not hard-code a version number — always pull it from the frontmatter so the banner stays accurate when the skill is updated.
 
 ## Step 1 – Identify the input files
 

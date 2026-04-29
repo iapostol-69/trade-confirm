@@ -58,6 +58,7 @@ SUMMARY_FILL      = PatternFill("solid", fgColor="FFEEF2FF")
 EXTRA_FILL        = PatternFill("solid", fgColor="FFFFE4B5")
 
 WHITE_BOLD   = Font(name="Arial", size=10, bold=True, color="FFFFFFFF")
+NORMAL       = Font(name="Arial", size=10)
 SUMMARY_FONT = Font(name="Arial", size=10, bold=True, color="FF1A237E")
 DIFF_FONT    = Font(name="Arial", size=10, bold=True, color="FF880000")
 
